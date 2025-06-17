@@ -1,0 +1,245 @@
+#include <SPI.h>
+#include <LoRa.h>
+#include <AESLib.h>
+
+// Definição dos pinos para o módulo LoRa
+#define SS   5   // NSS
+#define RST  14  // RST
+#define DIO0 2   // DIO0
+
+// Definição dos pinos para controle dos motores e relé
+#define ponteHR_En   27  // Sempre HIGH
+#define ponteHL_En   26  // Sempre HIGH
+#define h1RPWM       33
+#define h1LPWM       25
+#define ponteH2R_En  16  // Sempre HIGH
+#define ponteH2L_En  17  // Sempre HIGH
+#define h2LPWM       5
+#define h2RPWM       18
+#define releEntrada1 4   // LOW = ativado, HIGH = desligado
+
+// Chave AES
+uint8_t key[] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+                 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F};
+
+// IV
+uint8_t iv[] = {0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+                0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F};
+
+// Variáveis de movimento
+bool isMovingForward = false;
+bool isMovingBackward = false;
+bool isTurningLeft = false;
+bool isTurningRight = false;
+
+// Função para aplicar padding PKCS#7
+void pkcs7_pad(uint8_t *data, size_t *len, size_t block_size) {
+  size_t padding = block_size - (*len % block_size);
+  for (size_t i = 0; i < padding; i++) {
+    data[*len + i] = padding;
+  }
+  *len += padding;
+}
+
+// Função para remover padding PKCS#7
+void pkcs7_unpad(uint8_t *data, size_t *len, size_t block_size) {
+  if (*len == 0) return;
+  size_t padding = data[*len - 1];
+  if (padding > block_size || padding == 0) {
+    *len = 0;
+    return;
+  }
+  for (size_t i = 1; i < padding; i++) {
+    if (data[*len - i] != padding) {
+      *len = 0;
+      return;
+    }
+  }
+  *len -= padding;
+}
+
+void setup() {
+  // Inicializa pinos da BTS7960 e relé
+  pinMode(h1RPWM, OUTPUT);
+  pinMode(h1LPWM, OUTPUT);
+  pinMode(h2RPWM, OUTPUT);
+  pinMode(h2LPWM, OUTPUT);
+  pinMode(ponteHR_En, OUTPUT);
+  pinMode(ponteHL_En, OUTPUT);
+  pinMode(ponteH2R_En, OUTPUT);
+  pinMode(ponteH2L_En, OUTPUT);
+  pinMode(releEntrada1, OUTPUT);
+
+  digitalWrite(ponteHR_En, HIGH);
+  digitalWrite(ponteHL_En, HIGH);
+  digitalWrite(ponteH2R_En, HIGH);
+  digitalWrite(ponteH2L_En, HIGH);
+  digitalWrite(releEntrada1, HIGH); // Inicialmente desligado
+
+  Serial.begin(115200);
+  while (!Serial);
+  Serial.println("LoRa Receiver (Robô)");
+
+  // Configura LoRa
+  LoRa.setPins(SS, RST, DIO0);
+  if (!LoRa.begin(433E6)) {
+    Serial.println("Starting LoRa failed!");
+    while (1);
+  }
+  LoRa.setSyncWord(0x72);
+  LoRa.setSpreadingFactor(10);
+  LoRa.setSignalBandwidth(125E3);
+  LoRa.setCodingRate4(6);
+  LoRa.receive();
+
+  // Teste local de criptografia
+  Serial.println("Teste local de AES:");
+  AESLib aesLib;
+  uint8_t testData[] = "FORWARD";
+  size_t len = sizeof(testData) - 1;
+  uint8_t* paddedData = new uint8_t[len + 16];
+  memcpy(paddedData, testData, len);
+  size_t paddedLen = len;
+  pkcs7_pad(paddedData, &paddedLen, 16);
+  uint8_t* cipher = new uint8_t[paddedLen];
+  uint8_t ivCopy[16];
+  memcpy(ivCopy, iv, 16);
+  aesLib.encrypt(paddedData, paddedLen, cipher, key, sizeof(key), ivCopy);
+  memcpy(ivCopy, iv, 16);
+  uint8_t* decrypted = new uint8_t[paddedLen];
+  aesLib.decrypt(cipher, paddedLen, decrypted, key, sizeof(key), ivCopy);
+  size_t unpaddedLen = paddedLen;
+  pkcs7_unpad(decrypted, &unpaddedLen, 16);
+  Serial.print("Decrypted test: ");
+  for (size_t i = 0; i < unpaddedLen; i++) {
+    Serial.print((char)decrypted[i]);
+  }
+  Serial.println();
+  delete[] paddedData;
+  delete[] cipher;
+  delete[] decrypted;
+
+  Serial.println("LoRa Initializing OK!");
+}
+
+void loop() {
+  int packetSize = LoRa.parsePacket();
+  if (packetSize) {
+    Serial.print("Received packet size: ");
+    Serial.println(packetSize);
+
+    if (packetSize < 32) {
+      Serial.println("Packet too small!");
+      while (LoRa.available()) LoRa.read();
+      return;
+    }
+
+    // Lê o IV
+    uint8_t received_iv[16];
+    for (int i = 0; i < 16; i++) {
+      received_iv[i] = LoRa.read();
+    }
+    Serial.print("Received IV: ");
+    for (int i = 0; i < 16; i++) {
+      Serial.print(received_iv[i], HEX);
+      Serial.print(" ");
+    }
+    Serial.println();
+
+    // Lê o texto cifrado
+    int cipherLen = packetSize - 16;
+    uint8_t* cipherText = new uint8_t[cipherLen];
+    for (int i = 0; i < cipherLen; i++) {
+      cipherText[i] = LoRa.read();
+    }
+    Serial.print("Received CipherText: ");
+    for (int i = 0; i < cipherLen; i++) {
+      Serial.print(cipherText[i], HEX);
+      Serial.print(" ");
+    }
+    Serial.println();
+
+    // Descriptografa
+    AESLib aesLib;
+    uint8_t* plainText = new uint8_t[cipherLen];
+    uint8_t ivCopy[16];
+    memcpy(ivCopy, received_iv, 16);
+    aesLib.decrypt(cipherText, cipherLen, plainText, key, sizeof(key), ivCopy);
+
+    // Depuração do texto plano
+    Serial.print("PlainText before unpad: ");
+    for (int i = 0; i < cipherLen; i++) {
+      Serial.print(plainText[i], HEX);
+      Serial.print(" ");
+    }
+    Serial.println();
+
+    // Remove padding
+    size_t plainLen = cipherLen;
+    pkcs7_unpad(plainText, &plainLen, 16);
+
+    if (plainLen == 0) {
+      Serial.println("Invalid padding");
+    } else {
+      String message = String((char*)plainText, plainLen);
+      Serial.print("Received decrypted message: ");
+      Serial.println(message);
+      executeCommand(message);
+    }
+
+    delete[] cipherText;
+    delete[] plainText;
+  }
+}
+
+void stopAllMovements() {
+  isMovingForward = false;
+  isMovingBackward = false;
+  isTurningLeft = false;
+  isTurningRight = false;
+  digitalWrite(h1RPWM, LOW);
+  digitalWrite(h1LPWM, LOW);
+  digitalWrite(h2RPWM, LOW);
+  digitalWrite(h2LPWM, LOW);
+  Serial.println("PARADO");
+}
+
+void executeCommand(String command) {
+  stopAllMovements();
+  delay(50);
+
+  if (command == "FORWARD") {
+    isMovingForward = true;
+    digitalWrite(h1RPWM, LOW);
+    digitalWrite(h1LPWM, HIGH);
+    digitalWrite(h2RPWM, LOW);
+    digitalWrite(h2LPWM, HIGH);
+    Serial.println("FRENTE");
+  } else if (command == "BACKWARD") {
+    isMovingBackward = true;
+    digitalWrite(h1RPWM, HIGH);
+    digitalWrite(h1LPWM, LOW);
+    digitalWrite(h2RPWM, HIGH);
+    digitalWrite(h2LPWM, LOW);
+    Serial.println("TRAS");
+  } else if (command == "LEFT") {
+    isTurningLeft = true;
+    digitalWrite(h1RPWM, HIGH);
+    digitalWrite(h1LPWM, LOW);
+    digitalWrite(h2RPWM, LOW);
+    digitalWrite(h2LPWM, HIGH);
+    Serial.println("ESQUERDA");
+  } else if (command == "RIGHT") {
+    isTurningRight = true;
+    digitalWrite(h1RPWM, LOW);
+    digitalWrite(h1LPWM, HIGH);
+    digitalWrite(h2RPWM, HIGH);
+    digitalWrite(h2LPWM, LOW);
+    Serial.println("DIREITA");
+  } else if (command == "RELE") {
+    digitalWrite(releEntrada1, !digitalRead(releEntrada1));
+    Serial.println("Relé alternado");
+  } else {
+    stopAllMovements();
+  }
+}
