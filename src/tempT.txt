@@ -8,11 +8,11 @@
 #define DIO0 2   // Interrupção digital
 
 // Pinos dos botões
-#define BTN_FORWARD  12
-#define BTN_BACKWARD 13
-#define BTN_LEFT     14
-#define BTN_RIGHT    15
-#define BTN_RELE     16
+#define BTN_FORWARD  27
+#define BTN_BACKWARD 26
+#define BTN_LEFT     25
+#define BTN_RIGHT    33
+#define BTN_RELE     13
 
 // Chave AES de 16 bytes para AES-128
 uint8_t key[] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
@@ -43,9 +43,9 @@ void setup() {
     while (1);
   }
   LoRa.setSyncWord(0x72);
-  LoRa.setSpreadingFactor(10);
+  LoRa.setSpreadingFactor(7);
   LoRa.setSignalBandwidth(125E3);
-  LoRa.setCodingRate4(6);
+  LoRa.setCodingRate4(5);
   LoRa.setTxPower(20);
 
   // Configura pinos dos botões
@@ -84,18 +84,22 @@ void loop() {
   // Verifica botões
   if (digitalRead(BTN_FORWARD) == LOW) {
     sendCommand("FORWARD");
-    delay(200);
+    delay(300);
   } else if (digitalRead(BTN_BACKWARD) == LOW) {
     sendCommand("BACKWARD");
-    delay(200);
+    delay(300);
   } else if (digitalRead(BTN_LEFT) == LOW) {
     sendCommand("LEFT");
-    delay(200);
+    delay(300);
   } else if (digitalRead(BTN_RIGHT) == LOW) {
     sendCommand("RIGHT");
-    delay(200);
+    delay(300);
   } else if (digitalRead(BTN_RELE) == LOW) {
     sendCommand("RELE");
+    delay(400);
+  }
+  else{
+    sendCommand("p");
     delay(200);
   }
 }

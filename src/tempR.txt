@@ -8,15 +8,15 @@
 #define DIO0 2   // DIO0
 
 // Definição dos pinos para controle dos motores e relé
-#define ponteHR_En   27  // Sempre HIGH
-#define ponteHL_En   26  // Sempre HIGH
-#define h1RPWM       33
-#define h1LPWM       25
-#define ponteH2R_En  16  // Sempre HIGH
-#define ponteH2L_En  17  // Sempre HIGH
-#define h2LPWM       5
-#define h2RPWM       18
-#define releEntrada1 4   // LOW = ativado, HIGH = desligado
+#define ponteHR_En   33  // Sempre HIGH
+#define ponteHL_En   25  // Sempre HIGH
+#define h1RPWM       26
+#define h1LPWM       27
+#define ponteH2R_En  12  // Sempre HIGH
+#define ponteH2L_En  13  // Sempre HIGH
+#define h2LPWM       17
+#define h2RPWM       16
+#define releEntrada1 15   // LOW = ativado, HIGH = desligado
 
 // Chave AES
 uint8_t key[] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
