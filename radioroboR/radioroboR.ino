@@ -66,30 +66,37 @@ void pkcs7_unpad(uint8_t *data, size_t *len, size_t block_size) {
 void stopAllMovements() {
   digitalWrite(h1RPWM, LOW); digitalWrite(h1LPWM, LOW);
   digitalWrite(h2RPWM, LOW); digitalWrite(h2LPWM, LOW);
+  Serial.println("Todos os motores parados.");
 }
 
 void moveForward() {
-  digitalWrite(h1RPWM, LOW);  digitalWrite(h1LPWM, HIGH);
-  digitalWrite(h2RPWM, LOW);  digitalWrite(h2LPWM, HIGH);
+  digitalWrite(h1RPWM, LOW);  analogWrite(h1LPWM, 255);
+  digitalWrite(h2RPWM, LOW);  analogWrite(h2LPWM, 255);
+  Serial.println("Movendo para frente.");
 }
 
 void moveBackward() {
-  digitalWrite(h1RPWM, HIGH); digitalWrite(h1LPWM, LOW);
-  digitalWrite(h2RPWM, HIGH); digitalWrite(h2LPWM, LOW);
+  analogWrite(h1RPWM, 255); digitalWrite(h1LPWM, LOW);
+  analogWrite(h2RPWM, 255); digitalWrite(h2LPWM, LOW);
+  Serial.println("Movendo para trás.");
 }
 
 void turnLeft() {
-  digitalWrite(h1RPWM, HIGH); digitalWrite(h1LPWM, LOW);
-  digitalWrite(h2RPWM, LOW);  digitalWrite(h2LPWM, HIGH);
+  analogWrite(h1RPWM, 255); digitalWrite(h1LPWM, LOW);
+  digitalWrite(h2RPWM, LOW);  analogWrite(h2LPWM, 255);
+  Serial.println("Virando para a esquerda.");
 }
 
 void turnRight() {
-  digitalWrite(h1RPWM, LOW);  digitalWrite(h1LPWM, HIGH);
-  digitalWrite(h2RPWM, HIGH); digitalWrite(h2LPWM, LOW);
+  digitalWrite(h1RPWM, LOW);  analogWrite(h1LPWM, 255);
+  analogWrite(h2RPWM, 255); digitalWrite(h2LPWM, LOW);
+  Serial.println("Virando para a direita.");
 }
 
 void toggleRele() {
   digitalWrite(releEntrada1, !digitalRead(releEntrada1));
+  //Serial.print("Relé ");
+  Serial.println(digitalRead(releEntrada1) ? "ativado." : "desativado.");
 }
 
 
